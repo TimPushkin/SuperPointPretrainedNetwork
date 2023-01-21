@@ -1,5 +1,6 @@
-import torch
 from typing import Tuple
+
+import torch
 
 
 class SuperPointDecoder(torch.nn.Module):
@@ -9,7 +10,9 @@ class SuperPointDecoder(torch.nn.Module):
     This class is based on `SuperPointFrontend` but doesn't use NumPy.
     """
 
-    def __init__(self, conf_thresh: float = 0.015, border_padding: int = 4, nms_dist: int = 4):
+    def __init__(
+        self, conf_thresh: float = 0.015, border_padding: int = 4, nms_dist: int = 4
+    ):
         """
         :param conf_thresh: key point confidence threshold
         :param border_padding: non Maximum Suppression (NMS) distance
@@ -54,15 +57,23 @@ class SuperPointDecoder(torch.nn.Module):
             inds[r_keypts[1, i], r_keypts[0, i]] = i
 
         # Pad the border of the grid, so that we can NMS points near the border
-        grid = torch.nn.functional.pad(grid, [self.nms_dist, self.nms_dist, self.nms_dist, self.nms_dist],
-                                       mode='constant')
+        grid = torch.nn.functional.pad(
+            grid,
+            [self.nms_dist, self.nms_dist, self.nms_dist, self.nms_dist],
+            mode="constant",
+        )
 
-        # Iterate through points, from highest to lowest conference, suppress neighborhood
+        # Iterate through points, highest to lowest confidence, suppress neighborhood
         for i, r_keypt in enumerate(r_keypts.t()):
-            pt = (r_keypt[0] + self.nms_dist, r_keypt[1] + self.nms_dist)  # Account for top and left padding
+            pt = (
+                r_keypt[0] + self.nms_dist,
+                r_keypt[1] + self.nms_dist,
+            )  # Account for top and left padding
             if grid[pt[1], pt[0]] == 1:  # If not yet suppressed
-                grid[(pt[1] - self.nms_dist):(pt[1] + self.nms_dist + 1),
-                (pt[0] - self.nms_dist):(pt[0] + self.nms_dist + 1)] = 0
+                grid[
+                    (pt[1] - self.nms_dist) : (pt[1] + self.nms_dist + 1),
+                    (pt[0] - self.nms_dist) : (pt[0] + self.nms_dist + 1),
+                ] = 0
                 grid[pt[1], pt[0]] = -1
 
         # Get all surviving -1's and return sorted array of remaining corners
@@ -74,8 +85,9 @@ class SuperPointDecoder(torch.nn.Module):
         out = out[:, sorted_inds]
         return out
 
-    def forward(self, semi_keypts: torch.Tensor, coarse_descrs: torch.Tensor, h: int, w: int) -> \
-            Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, semi_keypts: torch.Tensor, coarse_descrs: torch.Tensor, h: int, w: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Decodes SuperPoint output extracting key points and descriptors.
 
@@ -83,7 +95,8 @@ class SuperPointDecoder(torch.nn.Module):
         :param coarse_descrs: tensor shaped N x 256 x H/8 x W/8 with raw descriptors.
         :param h: image height.
         :param w: image width.
-        :return: tensor shaped 3 x M with key points [x, y, confidence] and tensor shaped 256 x M with descriptors.
+        :return: tensor shaped 3 x M with key points [x, y, confidence] and tensor
+        shaped 256 x M with descriptors.
         """
 
         semi_keypts = torch.squeeze(semi_keypts)
@@ -91,7 +104,7 @@ class SuperPointDecoder(torch.nn.Module):
         # --- Process points
 
         dense = torch.exp(semi_keypts)  # Softmax
-        dense /= torch.sum(dense, dim=0) + .00001  # Should sum to 1
+        dense /= torch.sum(dense, dim=0) + 0.00001  # Should sum to 1
         no_dust = dense[:-1, :, :]  # Remove dustbin
 
         # Reshape to get full resolution heatmap
@@ -102,7 +115,8 @@ class SuperPointDecoder(torch.nn.Module):
         heatmap = torch.permute(heatmap, [0, 2, 1, 3])
         heatmap = torch.reshape(heatmap, [h_c * self.cell_size, w_c * self.cell_size])
 
-        # Fixed coordinates names (https://github.com/magicleap/SuperPointPretrainedNetwork/pull/14)
+        # Fixed coordinates names:
+        # https://github.com/magicleap/SuperPointPretrainedNetwork/pull/14
         ys, xs = torch.where(heatmap >= self.conf_thresh)
         if len(xs) == 0:
             return torch.zeros(3, 0), torch.zeros(coarse_descrs.size(dim=1), 0)
@@ -120,8 +134,14 @@ class SuperPointDecoder(torch.nn.Module):
         keypts = keypts[:, sorted_inds]
 
         # Remove points along border
-        to_remove_w = torch.logical_or(keypts[0, :] < self.border_padding, keypts[0, :] >= (w - self.border_padding))
-        to_remove_h = torch.logical_or(keypts[1, :] < self.border_padding, keypts[1, :] >= (h - self.border_padding))
+        to_remove_w = torch.logical_or(
+            keypts[0, :] < self.border_padding,
+            keypts[0, :] >= (w - self.border_padding),
+        )
+        to_remove_h = torch.logical_or(
+            keypts[1, :] < self.border_padding,
+            keypts[1, :] >= (h - self.border_padding),
+        )
         to_remove = torch.logical_or(to_remove_w, to_remove_h)
         keypts = keypts[:, ~to_remove]
 
@@ -136,7 +156,9 @@ class SuperPointDecoder(torch.nn.Module):
         sample_keypts[1, :] = (sample_keypts[1, :] / (h / 2)) - 1
         sample_keypts = torch.transpose(sample_keypts, 0, 1).contiguous()
         sample_keypts = sample_keypts.view(1, 1, -1, 2)
-        descrs = torch.nn.functional.grid_sample(coarse_descrs, sample_keypts, align_corners=True)
+        descrs = torch.nn.functional.grid_sample(
+            coarse_descrs, sample_keypts, align_corners=True
+        )
         descrs = torch.reshape(descrs, [coarse_descrs.size(dim=1), -1])
         descrs /= torch.linalg.norm(descrs, dim=0)[None, :]
 
