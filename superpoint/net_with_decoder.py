@@ -4,8 +4,8 @@ from typing import Tuple
 
 import torch
 
-import decoder
-import demo_superpoint
+from superpoint import decoder
+from superpoint import net
 
 
 class SuperPointNetWithDecoder(torch.nn.Module):
@@ -13,7 +13,7 @@ class SuperPointNetWithDecoder(torch.nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.superpoint = demo_superpoint.SuperPointNet()
+        self.superpoint = net.SuperPointNet()
         self.decoder = decoder.SuperPointDecoder()
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
