@@ -14,9 +14,9 @@ class SuperPointDecoder(torch.nn.Module):
         self, conf_thresh: float = 0.015, border_padding: int = 4, nms_dist: int = 4
     ):
         """
-        :param conf_thresh: key point confidence threshold
-        :param border_padding: non Maximum Suppression (NMS) distance
-        :param nms_dist: remove key points this close to the border
+        :param conf_thresh: key point confidence threshold.
+        :param border_padding: remove key points this close to the border.
+        :param nms_dist: non Maximum Suppression (NMS) distance.
         """
 
         super(SuperPointDecoder, self).__init__()
